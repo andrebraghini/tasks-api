@@ -1,0 +1,72 @@
+version: '3.9'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql8
+    restart: always
+    volumes:
+      - ./data:/var/lib/mysql
+      - ./init.sql:/data/application/init.sql
+    command: --init-file /data/application/init.sql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: root
+  auth:
+    build:
+      context: "./"
+      dockerfile: "./auth-service/Dockerfile"
+    container_name: auth-service
+    restart: always
+    links:
+      - db
+    depends_on:
+      - db
+    environment:
+      - TOKEN_SECRET=f342124f-bccf-4765-aebe-4706a1224c79
+      - NODE_ENV=production
+      - TOKEN_EXPIRES_IN=1h
+      - DATABASE_CLIENT=mysql2
+      - DATABASE_HOST=db
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=root
+      - DATABASE_SCHEMA=auth
+  task:
+    build:
+      context: "./"
+      dockerfile: "./task-service/Dockerfile"
+    container_name: task-service
+    restart: always
+    links:
+      - db
+    depends_on:
+      - db
+    environment:
+      - NODE_ENV=production
+      - DATABASE_CLIENT=mysql2
+      - DATABASE_HOST=db
+      - DATABASE_PORT=3306
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=root
+      - DATABASE_SCHEMA=task
+  api:
+    build:
+      context: "./"
+      dockerfile: "./api/Dockerfile"
+    container_name: api
+    restart: always
+    ports:
+      - 4000:4000
+    links:
+      - auth-service
+      - task-service
+    depends_on:
+      - auth-service
+      - task-service
+    environment:
+      - TOKEN_SECRET=f342124f-bccf-4765-aebe-4706a1224c79
+      - NODE_ENV=production
+      - INTROSPECTION=true
+      - AUTH_SERVICE_URL=http://auth:3000
+      - TASK_SERVICE_URL=http://task:3000
